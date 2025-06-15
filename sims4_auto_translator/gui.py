@@ -63,17 +63,19 @@ def run_gui() -> None:
         source = source_var.get().upper()
         target = target_var.get().upper()
         file_list = list(Path(folder).rglob('*.strings'))
-        if not file_list:
-            messagebox.showerror('Error', 'No .strings files found')
+        package_list = list(Path(folder).rglob('Strings_*.package'))
+        if not file_list and not package_list:
+            messagebox.showerror('Error', 'No .strings or Strings_*.package files found')
             return
         key = apikey_var.get() or os.environ.get('DEEPL_AUTH_KEY', '')
         if not key:
             messagebox.showerror('Error', 'API key required')
             return
         translator = DeepLTranslator(key)
-        progress_bar.configure(maximum=len(file_list))
+        progress_bar.configure(maximum=len(file_list) + len(package_list))
         progress.set(0)
-        for idx, fp in enumerate(file_list, start=1):
+        progress_index = 0
+        for fp in file_list:
             entries = parse_strings_file(fp)
             texts = [e[1] for e in entries]
             masked = []
@@ -88,8 +90,29 @@ def run_gui() -> None:
             write_strings_file(zip([e[0] for e in entries], restored), out_path)
             if pack_var.get():
                 pack_strings_to_package(zip([e[0] for e in entries], restored), out_path.with_suffix('.package'))
-            progress.set(idx)
+            progress_index += 1
+            progress.set(progress_index)
             root.update_idletasks()
+
+        from .dbpf import iter_stbl_from_package, parse_stbl
+        for pkg in package_list:
+            for inst, data in iter_stbl_from_package(pkg):
+                entries = parse_stbl(data)
+                texts = [e[1] for e in entries]
+                masked = []
+                maps = []
+                for t in texts:
+                    m, mp = mask_placeholders(t)
+                    masked.append(m)
+                    maps.append(mp)
+                translated = translator.translate(masked, source, target)
+                restored = [unmask_placeholders(t, mp) for t, mp in zip(translated, maps)]
+                out_rel = pkg.relative_to(folder).with_suffix(f'_{inst:08X}.strings')
+                out_path = output_root / out_rel
+                write_strings_file(zip([e[0] for e in entries], restored), out_path)
+                progress_index += 1
+                progress.set(progress_index)
+                root.update_idletasks()
         messagebox.showinfo('Done', f'Translated files saved to {output_root}')
 
     tk.Button(root, text='Translate', command=start_translation).grid(row=7, column=0, columnspan=4, pady=5)
