@@ -1,0 +1,4 @@
+rich
+Typer[all]
+requests
+pytest
