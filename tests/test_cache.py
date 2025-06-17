@@ -1,4 +1,5 @@
 import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from sims4_auto_translator import deepl_api
 from sims4_auto_translator.deepl_api import DeepLTranslator
 
 
@@ -15,6 +16,7 @@ def test_cache(tmp_path, monkeypatch):
         return Resp()
 
     monkeypatch.setattr('sims4_auto_translator.deepl_api.requests.post', fake_post)
+    monkeypatch.setattr(deepl_api, 'CACHE_PATH', tmp_path / 'cache.json')
     translator = DeepLTranslator('testkey')
     result1 = translator.translate(['hello'], 'EN', 'UK')
     result2 = translator.translate(['hello'], 'EN', 'UK')
