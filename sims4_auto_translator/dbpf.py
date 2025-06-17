@@ -1,4 +1,5 @@
 import struct
+import zlib
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Tuple
@@ -59,13 +60,29 @@ def parse_stbl(data: bytes) -> List[Tuple[str, str]]:
     f = BytesIO(data)
     magic = f.read(4)
     if magic != b'STBL':
-        raise ValueError('Invalid STBL data')
+        try:
+            data = zlib.decompress(data)
+        except Exception as e:
+            raise ValueError('Invalid STBL data') from e
+        f = BytesIO(data)
+        magic = f.read(4)
+        if magic != b'STBL':
+            raise ValueError('Invalid STBL data')
+
     version = struct.unpack('<H', f.read(2))[0]
-    compressed = f.read(1)
+    compressed_flag = f.read(1)
     count = struct.unpack('<Q', f.read(8))[0]
     f.read(2)  # reserved
     string_len = struct.unpack('<I', f.read(4))[0]
+    strings = f.read(string_len)
+    if compressed_flag == b"\x01":
+        try:
+            strings = zlib.decompress(strings)
+        except Exception as e:
+            raise ValueError('Invalid compressed STBL data') from e
+
     entries: List[Tuple[str, str]] = []
+    f = BytesIO(strings)
     for _ in range(count):
         key_hash = struct.unpack('<I', f.read(4))[0]
         flags = f.read(1)
